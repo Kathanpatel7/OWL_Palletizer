@@ -67,26 +67,29 @@ def inverseKinematicSolver(robot_ip, target_poses):
     finally:
         disconnectETController(sock)
 def moveRobotToPoint(robot_ip, points):
-    conSuc,sock=connectETController( robot_ip )
-    
+    conSuc, sock = connectETController(robot_ip)
+
     if not conSuc:
         return None  # Connection failed
-    
+
     try:
-        # Set the servo status of the robotic arm to ON
         suc, result, id = sendCMD(sock, "set_servo_status", {"status": 1})
         time.sleep(1)
 
-        for point in points:
-            # Linear motion
-            suc, result, id = sendCMD(sock, "moveByLine", {
-                "targetPos": point,
-                "speed_type": 0,
-                "speed": 50,
-                "cond_type": 0,
-                "cond_num": 7,
-                "cond_value": 1
-            })
+        
+        # Linear motion
+        print("Moving to point:", points)
+        suc, result, id = sendCMD(sock, "moveByLine", {
+            "targetPos": points,
+            "speed_type": 0,
+            "speed": 200,
+            "cond_type": 0,
+            "cond_num": 7,
+            "cond_value": 1})
+
+        if not suc:
+            print("Error in moveByLine:", result)
+            return
 
         while True:
             # Get robot status
@@ -94,20 +97,30 @@ def moveRobotToPoint(robot_ip, points):
             if result == 0:
                 break
 
+    except Exception as e:
+        print("Error in moveRobotToPoint:", e)
     finally:
         disconnectETController(sock)
+
+
+
 
 def getMasterPoint(robot_ip):
     # Function to get the master point from the user
     conSuc, sock = connectETController(robot_ip)
-    print("Please Jogg to master position in Teach mode")
-    suc , result , id=sendCMD(sock,"set_servo_status",{"status" :1})
-    time . sleep (1)
+    input("Press enter after reaching desired pickup location ")
+    if conSuc:
+        suc , pickup , id=sendCMD(sock,"get_tcp_pose",{"coordinate_num": 0,"tool_num": 0})
+        print(pickup)
+    input("Press enter after reaching desired Transfer location ")
+    if conSuc:
+        suc , transfer , id=sendCMD(sock,"get_tcp_pose",{"coordinate_num": 0,"tool_num": 0})
+        print(transfer)
     input("Press enter after reaching desired master location and Switch robot to Remote mode")
     if conSuc:
         suc , result , id=sendCMD(sock,"get_tcp_pose",{"coordinate_num": 0,"tool_num": 0})
         print(result)
-    return result
+    return pickup,transfer,result
 
 def offsetPoses(master_point, target_poses):
     # Function to calculate offset poses based on the master point
@@ -115,50 +128,57 @@ def offsetPoses(master_point, target_poses):
     for pose in target_poses:
         offset_pose = [master_point[i] + pose[i] if i < 2 else master_point[i] for i in range(6)]
         offset_poses.append(offset_pose)
-        print()
+        print(offset_pose)
     return offset_poses
-
 
 if __name__ == "__main__":
     robot_ip = "192.168.1.200"
-    
-    # Get the master point from the user
-    master_point = getMasterPoint(robot_ip)
-    
+
+    # Get the master point and pickup point from the user
+    pickup_point,transfer_point, master_point = getMasterPoint(robot_ip)
+
     # List of target poses
     target_poses = [
-        [16.0, 12.0, 0],
-        [48.0, 12.0, 0],
-        [80.0, 12.0, 0],
-        [16.0, 36.0, 0],
-        [48.0, 36.0, 0],
-        [80.0, 36.0, 0],
-        [16.0, 60.0, 0],
-        [48.0, 60.0, 0],
-        [80.0, 60.0, 0],
-        [16.0, 84.0, 0],
-        [48.0, 84.0, 0],
-        [80.0, 84.0, 0],
-        [16.0, 108.0, 0],
-        [48.0, 108.0, 0],
-        [80.0, 108.0, 0],
-        [108.0, 16.0, 1],
-        [108.0, 48.0, 1],
-        [108.0, 80.0, 1]
+        [15.0, 20.0, 0],
+        [45.0, 20.0, 0],
+        [75.0, 20.0, 0],
+        [105.0, 20.0, 0],
+        [15.0, 60.0, 0],
+        [45.0, 60.0, 0],
+        [75.0, 60.0, 0],
+        [105.0, 60.0, 0],
+        [15.0, 100.0, 0],
+        [45.0, 100.0, 0],
+        [75.0, 100.0, 0],
+        [105.0, 100.0, 0]
     ]
 
     # Calculate offset poses based on the master point
     offset_poses = offsetPoses(master_point, target_poses)
-    
     con_success, sock = connectETController(robot_ip)
-    
+
     if con_success:
-        jointlist = inverseKinematicSolver(robot_ip, offset_poses)
-        moveRobotToPoint(robot_ip, jointlist)
-        
-        if jointlist is not None:
-            print("Inverse kinematics results:", jointlist)
-        else:
-            print("Inverse kinematics failed for one or more poses.")
+        try:
+            for pose in offset_poses:
+                # Move to the pickup point first
+                jointlist_pick = inverseKinematicSolver(robot_ip, [pickup_point])
+                moveRobotToPoint(robot_ip, jointlist_pick[0])
+                
+                # Move to the pickup point first
+                jointlist_transfer = inverseKinematicSolver(robot_ip, [transfer_point])
+                moveRobotToPoint(robot_ip, jointlist_transfer[0])
+
+                # Then move to the current target pose
+                jointlist_place = inverseKinematicSolver(robot_ip, [pose])  # Pass pose as a list
+                moveRobotToPoint(robot_ip, jointlist_place[0])  # Extract the first element from the list
+                time.sleep(1)   # Optional delay between movements
+
+            print("All poses reached successfully.")
+
+            # Perform other actions if needed
+        except Exception as e:
+            print("Error:", e)
+        finally:
+            disconnectETController(sock)
     else:
         print("Connection to the robot failed.")
