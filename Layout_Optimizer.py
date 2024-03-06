@@ -7,11 +7,10 @@ def can_place_box(x, y, box_width, box_height, pallet_size, placed_items):
         return False
     return not any(
         (x < px + pw and x + box_width > px and y < py + ph and y + box_height > py)
-        for px, py, pw, ph in placed_items
+        for px, py, pw, ph, _ in placed_items  # Adjust unpacking for orientation info
     )
 
 def find_next_position(pallet_size, box_dim, placed_items):
-    """Find the next position where a box can be placed."""
     for y in range(pallet_size[1] - box_dim[1] + 1):
         for x in range(pallet_size[0] - box_dim[0] + 1):
             if can_place_box(x, y, box_dim[0], box_dim[1], pallet_size, placed_items):
@@ -23,25 +22,24 @@ def optimize_box_placement(num_boxes, box_dim, pallet_size):
     for _ in range(num_boxes):
         position = find_next_position(pallet_size, box_dim, placed_items)
         if position:
-            placed_items.append((position[0], position[1], box_dim[0], box_dim[1]))
+            placed_items.append((position[0], position[1], box_dim[0], box_dim[1], 0))  # Added orientation info
         else:
             # Try with rotated box
             rotated_box_dim = (box_dim[1], box_dim[0])
             position = find_next_position(pallet_size, rotated_box_dim, placed_items)
             if position:
-                placed_items.append((position[0], position[1], rotated_box_dim[0], rotated_box_dim[1]))
+                placed_items.append((position[0], position[1], rotated_box_dim[0], rotated_box_dim[1], 1))  # Orientation changed
             else:
                 break  # No more space on the pallet
 
     return placed_items
 
 def get_center_coordinates(placed_items):
-    """Get center coordinates for each placed box."""
     center_coordinates = []
     for item in placed_items:
         center_x = item[0] + item[2] / 2
         center_y = item[1] + item[3] / 2
-        center_coordinates.append((center_x, center_y))
+        center_coordinates.append((center_x, center_y, item[4]))  # Include orientation info in the center coordinates
     return center_coordinates
 
 def plot_pallet(pallet_size, items):
@@ -62,6 +60,8 @@ def plot_pallet(pallet_size, items):
     plt.gca().set_aspect('equal', adjustable='box')
     plt.show()
 
+# Then, use the modified version of this script as before, but now the center_coordinates output will also include whether the box was rotated or not.
+
 # User input for number of boxes and dimensions
 num_boxes = int(input("Enter the number of boxes: "))
 box_width = int(input("Enter the box width: "))
@@ -79,7 +79,7 @@ center_coordinates = get_center_coordinates(placed_items)
 # Output the center coordinates
 print("Center coordinates of each box:")
 for center in center_coordinates:
-    print(f"({center[0]}, {center[1]})")
+    print(f"({center[0]}, {center[1]}, {center[2]})")
 
 # Plot the pallet with items and center coordinates
 plot_pallet(pallet_size, placed_items)
