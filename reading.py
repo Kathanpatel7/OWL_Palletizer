@@ -96,20 +96,64 @@ def moveRobotToPoint(robot_ip, points):
 
     finally:
         disconnectETController(sock)
+
+def getMasterPoint(robot_ip):
+    # Function to get the master point from the user
+    conSuc, sock = connectETController(robot_ip)
+    print("Please Jogg to master position in Teach mode")
+    suc , result , id=sendCMD(sock,"set_servo_status",{"status" :1})
+    time . sleep (1)
+    input("Press enter after reaching desired master location and Switch robot to Remote mode")
+    if conSuc:
+        suc , result , id=sendCMD(sock,"get_tcp_pose",{"coordinate_num": 0,"tool_num": 0})
+        print(result)
+    return result
+
+def offsetPoses(master_point, target_poses):
+    # Function to calculate offset poses based on the master point
+    offset_poses = []
+    for pose in target_poses:
+        offset_pose = [master_point[i] + pose[i] if i < 2 else master_point[i] for i in range(6)]
+        offset_poses.append(offset_pose)
+        print()
+    return offset_poses
+
+
 if __name__ == "__main__":
-    # Example usage with a list of poses
     robot_ip = "192.168.1.200"
+    
+    # Get the master point from the user
+    master_point = getMasterPoint(robot_ip)
     
     # List of target poses
     target_poses = [
-        [70, 370, 300, -0.785398, 0, -1.57]
-        
+        [16.0, 12.0, 0],
+        [48.0, 12.0, 0],
+        [80.0, 12.0, 0],
+        [16.0, 36.0, 0],
+        [48.0, 36.0, 0],
+        [80.0, 36.0, 0],
+        [16.0, 60.0, 0],
+        [48.0, 60.0, 0],
+        [80.0, 60.0, 0],
+        [16.0, 84.0, 0],
+        [48.0, 84.0, 0],
+        [80.0, 84.0, 0],
+        [16.0, 108.0, 0],
+        [48.0, 108.0, 0],
+        [80.0, 108.0, 0],
+        [108.0, 16.0, 1],
+        [108.0, 48.0, 1],
+        [108.0, 80.0, 1]
     ]
+
+    # Calculate offset poses based on the master point
+    offset_poses = offsetPoses(master_point, target_poses)
     
     con_success, sock = connectETController(robot_ip)
     
     if con_success:
-        jointlist = inverseKinematicSolver(robot_ip, target_poses)
+        jointlist = inverseKinematicSolver(robot_ip, offset_poses)
         moveRobotToPoint(robot_ip, jointlist)
         
         if jointlist is not None:
